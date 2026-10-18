@@ -15,7 +15,7 @@ Operated mostly by Claude Code. Full plan, decisions and runbook: [docs/backup-p
 |---|---|---|
 | backup | hourly at :17 | `restic backup ~` with `excludes.txt` |
 | prune | Sundays 12:41 | retention 24 hourly / 14 daily / 8 weekly / 12 monthly |
-| check | Wednesdays 12:41 | integrity (5% data read in the first week of a month), critical paths, size trend, Full Disk Access |
+| check | Wednesdays 12:41 | integrity (5% data read in the first week of a month), critical paths, size trend, Full Disk Access, software inventory |
 | restore-test | quarterly | restore one random small critical folder and verify it |
 
 Missed runs (Mac asleep) run once on wake.
@@ -30,6 +30,12 @@ git clone <repo> ~/.config/mac-backup
 ~/.config/mac-backup/install.sh --load     # enable the schedules
 launchctl kickstart gui/$(id -u)/com.pietro.mac-backup.backup   # first backup, under the runner's FDA
 ```
+
+## Software inventory
+
+Installed software lives outside the home folder and is not backed up; it is reinstallable. The weekly
+check writes what is installed to `state/inventory/` (Brewfile, apps, global npm packages, uv tools,
+editor extensions), which is backed up. On a new Mac: `brew bundle --file ~/.config/mac-backup/state/inventory/Brewfile`.
 
 ## Restore
 

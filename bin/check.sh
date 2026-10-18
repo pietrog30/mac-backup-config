@@ -41,5 +41,8 @@ else
     note "could not read snapshot size"; problems=$((problems + 1))
 fi
 
+# 5. Software inventory (Brewfile, apps, global packages) into the home folder, so backups capture it
+"$MB_DIR/bin/inventory.sh" | tee -a "$OUT"
+
 if (( problems > 0 )); then log "FAIL: $problems problem(s)"; mb_ping "$HC_CHECK_URL" /fail "$OUT"; exit 1; fi
 log "ok"; mb_ping "$HC_CHECK_URL" "" "$OUT"

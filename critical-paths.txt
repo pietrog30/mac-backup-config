@@ -10,6 +10,7 @@
 .ssh
 .config/ghostty
 .config/mac-backup/secrets.env
+.config/mac-backup/state/inventory/Brewfile
 .zshrc
 .gitconfig
 .codex/sessions

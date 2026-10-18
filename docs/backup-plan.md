@@ -1,13 +1,13 @@
 # Laptop backup plan — restic → Backblaze B2, operated by Claude
 
-Status: v5, 2026-10-18 (phase B built). Lives in `pietrog30/mac-backup-config` at `docs/backup-plan.md`. Owner: Pietro. Operator: Claude Code (one account per laptop).
+Status: v6, 2026-10-18 (phase B built; inventory and audit sync added). Lives in `pietrog30/mac-backup-config` at `docs/backup-plan.md`. Owner: Pietro. Operator: Claude Code (one account per laptop).
 This file is the single source of truth for the project. Tick boxes as steps complete; both laptops follow it.
 
 ## Operator notes (for Claude, on every laptop)
 
 - **No next-step cards.** In the Claude desktop app, do not end a turn with a question card or buttons. Write the full answer, including any question or next step, as normal text in the final message. Reason (Pietro, 2026-10-18): the cards hide the output text.
 - Never ask for or echo secrets. Pietro fills `secrets.env` himself; Claude only checks it is mode 600 and has no placeholders.
-- Do not change config, schedules or the repository without Pietro's approval, except for steps in this plan he has asked to run.
+- Do not change config, schedules or the repository without Pietro's approval, except for steps in this plan he has asked to run. One standing exception: the audit task runs `git pull --ff-only` on a clean tree.
 
 ## 0. Decisions (settled)
 
@@ -62,6 +62,7 @@ mac-backup-config/
   bin/check.sh           weekly: FDA probe, restic check (5% read in week 1 of a month), critical paths, size trend
   bin/restore-test.sh    quarterly: restore a random small critical folder with --verify
   bin/restic.sh          manual helper: restic with this Mac's secrets loaded
+  bin/inventory.sh       writes installed-software lists to state/inventory/ (weekly via check.sh; no secrets needed)
   excludes.txt           shared exclude list — the source of truth (section 7 only summarizes)
   critical-paths.txt     paths that must be in every snapshot when they exist locally
   hosts/<host>.env       RESTIC_REPOSITORY + AWS_DEFAULT_REGION per Mac; optional hosts/<host>.excludes
@@ -92,7 +93,7 @@ Implementation rules:
 - [ ] C6. Verify: `restic snapshots`, `restic ls latest ~/.claude/settings.json ~/.aws ~/.ssh/config` present; `restic stats` roughly matches estimate; healthchecks shows a ping.
 - [ ] C7. Confirm the next hourly run completes on its own (`backup.log` + healthchecks).
 - [ ] C8. Test restore: `launchctl kickstart gui/$(id -u)/com.pietro.mac-backup.restore-test`, plus a manual `bin/restic.sh restore latest --include ~/.claude/settings.json --target /tmp/r`. Also run the check job once the same way.
-- [ ] C9. Create the weekly Claude scheduled task on this laptop from `audit/weekly-audit.md`.
+- [ ] C9. Create the Claude scheduled task on this laptop: weekly, prompt exactly `Read ~/.config/mac-backup/audit/weekly-audit.md and follow it exactly.` The instructions live in git, never in the task.
 - [ ] C10. Record restic version, repo ID, first snapshot ID and date here: `________`.
 
 ## 5. Phase D — Install on the other laptop (M2, its own Claude Code account)
@@ -106,7 +107,7 @@ Hand-off: the M2 gets this file from the config repo (`docs/backup-plan.md`); Ai
 
 ## 6. Phase E — Operations runbook
 
-Weekly Claude scheduled task (both laptops, each on its own repo; identical prompt kept in `audit/weekly-audit.md`). Cadence: weekly for ~3 months, then monthly, then possibly retire it — the scripts + healthchecks already catch hard failures; the task adds trend reading and judgement:
+Claude scheduled task on both laptops, each auditing its own repo. The task holds only a one-line pointer to `audit/weekly-audit.md`; the audit pulls the repo first (fast-forward only, clean tree only), so editing the instructions once in git updates both Macs. **Cadence lives in each Mac's task settings, not in git: change it on both Macs together;** each report states its cadence so drift shows up. Cadence: weekly for ~3 months, then monthly, then possibly retire it — the scripts + healthchecks already catch hard failures; the task adds trend reading and judgement:
 1. `restic snapshots --json`: newest snapshot < 26 h old; roughly one per awake hour over the last week (laptops sleep, so do not expect 24/day).
 2. Tail `~/Library/Logs/mac-backup/backup.log` for errors; read healthchecks status.
 3. `restic check` output from the last weekly run is clean; monthly read-data run happened.
@@ -126,6 +127,7 @@ Common tasks:
 - Move storage: `rclone sync <b2 remote>:… <new>` then change `REPO` in the host env file. No re-upload from laptops.
 - Change tool: new tool starts from today; keep the restic repos read-only for ≥ 12 months (≈ $1/month). History can be replayed into restic with `backup --time` if ever needed.
 - Upgrade restic: plain `brew upgrade restic` is safe; FDA belongs to the runner, not restic. Rebuilding the runner (only if `src/runner.c` changes) changes its signature: re-grant FDA, then kickstart the check job.
+- Reinstall software on a new Mac: `brew bundle --file ~/.config/mac-backup/state/inventory/Brewfile` after restoring the home folder; the other lists in `state/inventory/` (apps, npm globals, uv tools, editor extensions) are a checklist.
 - Add a folder to excludes: edit `excludes.txt`, commit, push, `git pull` on the other laptop. Already-stored data ages out via retention.
 
 ## 7. Exclude list (draft, refine in B2)
@@ -148,6 +150,7 @@ Exclude decisions:
 ## 8. Decision log
 
 - 2026-10-18: region EU Central; Apple Passwords app + 600 env file; hourly; Claude task on both laptops (weekly → monthly → retire); Cursor state excluded; old disk / Time Machine deferred to phase Z.
+- 2026-10-18 (v6): installed software is not backed up (reinstallable); a weekly inventory (Brewfile, apps, global packages) is written into the home folder instead. Scheduled task = one-line pointer to the audit file in git; the audit pulls first; cadence changed on both Macs together.
 - 2026-10-18 (v5, phase B): FDA via a compiled runner instead of the restic binary (no brew pin needed); mkdir lock instead of flock; `~/.cache` and other dev caches excluded after finding 41GB there; 25-unreadable-file tolerance; plan moved into the repo.
 - 2026-10-18 (v4): bucket soft-delete 30 days; S3-compatible endpoint; cloud-placeholder folders excluded; plan lives in the config repo; `critical-paths.txt` checked weekly; flock/unlock/battery guard/pack-size 64 in `backup.sh`; restic upgrade procedure; Docker-volume and logs caveats noted.
 
