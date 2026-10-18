@@ -3,6 +3,12 @@
 Status: v5, 2026-10-18 (phase B built). Lives in `pietrog30/mac-backup-config` at `docs/backup-plan.md`. Owner: Pietro. Operator: Claude Code (one account per laptop).
 This file is the single source of truth for the project. Tick boxes as steps complete; both laptops follow it.
 
+## Operator notes (for Claude, on every laptop)
+
+- **No next-step cards.** In the Claude desktop app, do not end a turn with a question card or buttons. Write the full answer, including any question or next step, as normal text in the final message. Reason (Pietro, 2026-10-18): the cards hide the output text.
+- Never ask for or echo secrets. Pietro fills `secrets.env` himself; Claude only checks it is mode 600 and has no placeholders.
+- Do not change config, schedules or the repository without Pietro's approval, except for steps in this plan he has asked to run.
+
 ## 0. Decisions (settled)
 
 | Topic | Decision |
