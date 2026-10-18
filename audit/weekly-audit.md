@@ -41,6 +41,23 @@ runs restic against this Mac's repository. Logs: `~/Library/Logs/mac-backup/`. L
     (written by the weekly check).
 12. **Cadence.** State this Mac's audit cadence (weekly or monthly, from the scheduled task settings)
     in the report, so a mismatch between the two Macs is visible.
+13. **Open decision: M2 iCloud folders (M2 only, `BACKUP_HOST=m2-air`).** Until Pietro has decided and
+    this item is removed, end every M2 report with a short reminder. `~/Desktop`, `~/Documents` and
+    iCloud Drive are excluded on the M2 (`hosts/m2-air.excludes`, decided 2026-10-18, plan D2) because
+    "Optimize Mac Storage" keeps them almost entirely in iCloud and the disk is nearly full. Downsides of
+    that setup, to restate in the reminder:
+    - iCloud is sync, not backup: a deletion, overwrite or corruption (including by malware) reaches every
+      device. Recently Deleted keeps files for 30 days; most files have no version history.
+    - Losing access to the Apple account means losing these files.
+    - This covers ~58 GB, including `Documents/UNI`, `Documents/producer` and `Documents/fotos e videos`, plus the
+      `Documents/Courses` folder, whose one-time archive snapshot was also deferred.
+    Options to put to Pietro: (a) back them up hourly with restic's `--ignore-ctime` after a first pass
+    in ~8 GB batches (tested 2026-10-18: downloading or evicting a file changes only its ctime, so
+    restic would then skip unchanged placeholders without downloading them); (b) mark small, important
+    folders "Keep Downloaded" in Finder and back up only those; (c) move folders to the M4, as was done
+    for `Documents/AX`; (d) one-time archive snapshots under a separate restic host name for folders that
+    never change. Include the current size: free disk space (`df -h ~`) and the iCloud-only total
+    (`find ~/Desktop ~/Documents -type f -flags +dataless -print0 | xargs -0 stat -f %z | awk '{s+=$1} END {print s/2^30 " GB"}'`).
 
 ## Report
 

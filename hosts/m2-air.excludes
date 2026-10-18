@@ -1,0 +1,7 @@
+# MacBook Air M2: extra excludes, on top of excludes.txt.
+# Desktop and Documents sync to iCloud Drive with "Optimize Mac Storage" on, so almost everything in
+# them is an iCloud-only placeholder (~58 GB, measured 2026-10-18) on a disk with ~16 GB free.
+# Reading them would force a download of everything. For now they rely on iCloud alone; the weekly
+# audit reminds Pietro to reconsider (see docs/backup-plan.md, D2).
+$HOME/Desktop
+$HOME/Documents

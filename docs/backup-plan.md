@@ -1,6 +1,6 @@
 # Laptop backup plan — restic → Backblaze B2, operated by Claude
 
-Status: v8, 2026-10-18 (phase C done on the M4; M2 next). Lives in `pietrog30/mac-backup-config` at `docs/backup-plan.md`. Owner: Pietro. Operator: Claude Code (one account per laptop).
+Status: v9, 2026-10-18 (phase C done on the M4; phase D in progress on the M2: D1 partly, D2 done). Lives in `pietrog30/mac-backup-config` at `docs/backup-plan.md`. Owner: Pietro. Operator: Claude Code (one account per laptop).
 This file is the single source of truth for the project. Tick boxes as steps complete; both laptops follow it.
 
 ## Operator notes (for Claude, on every laptop)
@@ -108,10 +108,18 @@ Implementation rules:
 
 Hand-off: the M2 gets this file from the config repo (`docs/backup-plan.md`); AirDrop only as a fallback. Its Claude reads sections 0, 3 (done), 4, 6, 7 and runs phase C with `hosts/m2-air.env`. Secrets come from the Passwords app (already synced), never from this file.
 
-- [ ] D1. GitHub access: the M2's Claude Code is believed to use Pietro's personal account directly, so it clones over HTTPS with no extra setup (verify with `gh auth status`). Fallback, if it is restricted like the M4: create an M2 deploy key (`ssh-keygen -t ed25519 -f ~/.ssh/mac-backup-config -N "" -C "m2-air mac-backup-config deploy key"`), Pietro adds it with write access, add the same `Host github-mac-backup` block to `~/.ssh/config`. Then clone the config repo, `install.sh`, `secrets.env` from the Passwords app, FDA grant.
-- [ ] D2. Confirm `hosts/m2-air.env` exists (if the M2 differs, e.g. real hostname or extra excludes, add them there, commit, push; the M4 pulls). Decide the iCloud Drive question (section 7 notes) and record it here: `________`.
+- [ ] D1. GitHub access: the M2's Claude Code is believed to use Pietro's personal account directly, so it clones over HTTPS with no extra setup (verify with `gh auth status`). Fallback, if it is restricted like the M4: create an M2 deploy key (`ssh-keygen -t ed25519 -f ~/.ssh/mac-backup-config -N "" -C "m2-air mac-backup-config deploy key"`), Pietro adds it with write access, add the same `Host github-mac-backup` block to `~/.ssh/config`. Then clone the config repo, `install.sh`, `secrets.env` from the Passwords app, FDA grant. Progress 2026-10-18: `gh` is logged in as `pietrog30`, cloned over HTTPS (no deploy key needed), `install.sh` run (restic 0.19.1, runner built). Still open: `secrets.env` and the FDA grant (Pietro).
+- [x] D2. `hosts/m2-air.env` exists. iCloud Drive decision (2026-10-18): **Desktop, Documents and iCloud Drive are excluded on the M2 for now** (`hosts/m2-air.excludes`; app data in iCloud, `~/Library/Mobile Documents`, is excluded on both Macs in `excludes.txt`). Measured: Desktop & Documents sync to iCloud with Optimize Mac Storage on; after the shared excludes they hold ~58 GB (plus `Documents/AX`, see D5, and `Documents/Courses`), of which only ~0.4 GB is downloaded, on a 228 GB disk with 16 GB free. Turning Optimize Mac Storage off is impossible (no space); backing them up as-is would force a download of everything. They rely on iCloud alone, which is sync, not backup; the weekly audit (item 13) reminds Pietro to reconsider and lists the options. `Documents/Zoom` (old meeting recordings, 41 GB) is deleted by Pietro, without a backup.
 - [ ] D3. `restic init` on `s3:https://s3.eu-central-003.backblazeb2.com/pietro-mac-backups/m2`, first backup, verify, launchd, restore test, scheduled task, alert-email test — same checks as C4–C11.
-- [ ] D4. Record M2 facts (model, home size, payload, snapshot ID) here: `________`.
+- [ ] D4. Record M2 facts (model, home size, payload, snapshot ID) here: MacBook Air M2 (Mac14,2), macOS 15.7.9, hostname `pietros-macbook-air-6.home`, home 56 GB on disk, disk 228 GB with 16 GB free. Payload and snapshot ID: `________`.
+- [ ] D5. **Move `Documents/AX` to the M4** (29.4 GB, iCloud-only on the M2: ~26 GB of videos in `salesprocess`, plus `dev`, `Leads`, `L1A`, `SWS Contract`). Run on the M4 by its Claude, with Pietro for the settings steps:
+  1. `git pull` on the M4 and confirm `excludes.txt` has `$HOME/Library/Mobile Documents`. Without it, the M4's hourly backup would read the iCloud placeholders that appear in step 3 and download all of iCloud.
+  2. Check free space on the M4 (`df -h ~`): AX needs ~30 GB plus headroom.
+  3. **Pietro:** System Settings → Apple Account → iCloud → iCloud Drive → on. Leave **"Desktop & Documents Folders" off**, otherwise the M4's own Desktop and Documents move into iCloud.
+  4. In Finder, copy `iCloud Drive/Documents/AX` to `~/Desktop/AX` (a copy, not a move; Finder downloads it from iCloud). Wait until it has fully downloaded, then compare file counts and total size with the iCloud folder.
+  5. Let the next hourly backup run, then `bin/restic.sh ls latest ~/Desktop/AX` and restore one file to `/tmp` to confirm it is in B2.
+  6. Only then, **Pietro** deletes `Documents/AX` from iCloud (Finder; it stays in iCloud's Recently Deleted for 30 days). Optionally turn iCloud Drive off on the M4 again; the local `~/Desktop/AX` is unaffected. If macOS offers to keep a copy of iCloud Drive, decline: the copy would download everything into the home folder, outside the excludes.
+  7. Record the date and the first snapshot that contains it here: `________`.
 
 ## 6. Phase E — Operations runbook
 
@@ -143,10 +151,10 @@ Common tasks:
 
 The list itself is `excludes.txt` in the repo (source of truth). Categories: macOS caches/logs/Trash; developer caches and package stores (`~/.cache` incl. uv's 38GB cache, `~/.npm`, `~/.local/share/uv`, `~/.local/share/claude`, `node_modules`, `.venv`, `__pycache__`, `.next`, `.turbo`, Rust `target/`); Docker's container; Cursor caches, extensions and its chat-state database; Claude Desktop VM bundles, bundled CLI versions and browser caches; Claude Code caches and debug output; Chrome caches; `~/Library/CloudStorage` placeholders; Mail and Photos (out of scope). Plus `--exclude-caches` and `--exclude-if-present .nobackup`; drop an empty `.nobackup` file into any folder to exclude it.
 
-Per-host (`hosts/m2-air.excludes`, conditional on the D2 decision): `~/Library/Mobile Documents` and any iCloud-managed folders.
+Per-host: `hosts/m2-air.excludes` excludes `~/Desktop` and `~/Documents` (D2). `~/Library/Mobile Documents` (iCloud Drive and app data in iCloud) is in the shared `excludes.txt`, so turning on iCloud Drive on any Mac never triggers a mass download.
 
 Notes:
-- **M2 / iCloud Drive:** the M2 syncs Desktop, Documents and more to iCloud. With "Optimize Mac Storage" on, those folders contain dataless placeholders and restic would force a download of everything. Either turn Optimize Mac Storage off on the M2 (then include them — they are the real files) or exclude the iCloud-managed folders and rely on iCloud for them. Decide in D2.
+- **M2 / iCloud Drive:** the M2 syncs Desktop and Documents to iCloud with "Optimize Mac Storage" on, so they are almost entirely dataless placeholders and restic would force a download of everything. Decided in D2: excluded for now, relying on iCloud; reconsider via the weekly audit (item 13).
 - Docker exclude drops anything stored in Docker volumes. Fine unless a local database there matters.
 - `~/Library/Logs` exclude also drops the backup logs themselves; acceptable.
 
@@ -157,6 +165,8 @@ Exclude decisions:
 - `~/Library/Application Support/Claude/claude-code` and `claude-code-vm`: **excluded** (bundled CLI binaries, re-downloaded). `claude-code-sessions`, `local-agent-mode-sessions`, configs: included.
 
 ## 8. Decision log
+
+- 2026-10-18 (v9, phase D started on the M2): M2's Desktop, Documents and iCloud Drive excluded for now (iCloud-only placeholders, disk nearly full); the weekly audit reminds Pietro to reconsider, with the downsides and options. `~/Library/Mobile Documents` excluded on both Macs. `Documents/AX` moves to the M4's Desktop (D5). `Documents/Zoom` deleted without a backup. A one-time archive snapshot of `Documents/Courses` was discussed and deferred with the rest.
 
 - 2026-10-18: region EU Central; Apple Passwords app + 600 env file; hourly; Claude task on both laptops (weekly → monthly → retire); Cursor state excluded; old disk / Time Machine deferred to phase Z.
 - 2026-10-18 (v8): phase C done on the M4. Pack size back to restic's default; excluded 4 always-unreadable Apple folders plus churning macOS telemetry and Chrome safe-browsing/favicons. Hourly runs take 8–14 min because of single-connection upload speed (see section 1).
