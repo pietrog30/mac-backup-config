@@ -67,6 +67,8 @@ $HOME/Library/Application Support/Google/DriveFS
 # --- Cloud-synced placeholders: reading them forces a download of everything
 $HOME/Library/CloudStorage
 $HOME/Library/Mobile Documents
+# OneDrive keeps its files here (CloudStorage only holds a pointer); its placeholders read as zeros
+$HOME/Library/Group Containers/UBF8T346G9.OneDriveStandaloneSuite/OneDrive*
 
 # --- Out of scope (decided 2026-10-18)
 $HOME/Library/Mail
