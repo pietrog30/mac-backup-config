@@ -1,6 +1,6 @@
 # Laptop backup plan — restic → Backblaze B2, operated by Claude
 
-Status: v6, 2026-10-18 (phase B built; inventory and audit sync added). Lives in `pietrog30/mac-backup-config` at `docs/backup-plan.md`. Owner: Pietro. Operator: Claude Code (one account per laptop).
+Status: v8, 2026-10-18 (phase C done on the M4; M2 next). Lives in `pietrog30/mac-backup-config` at `docs/backup-plan.md`. Owner: Pietro. Operator: Claude Code (one account per laptop).
 This file is the single source of truth for the project. Tick boxes as steps complete; both laptops follow it.
 
 ## Operator notes (for Claude, on every laptop)
@@ -35,6 +35,13 @@ Expected cost: the M4 measured at ~8.6GB stored (section 1); both laptops plus a
 - **Measured payload (dry-run 2026-10-18, restic 0.19.1):** 269k files, 25.3GB read, 21.4GB unique, **8.6GB stored** after compression (transcripts compress very well). The scan took 59 s, so hourly runs are cheap. The dry-run hit 797 read errors in macOS-protected `~/Library` folders because it ran without Full Disk Access; the first real run under the runner shows how many remain, and `MB_MAX_READ_ERRORS` (25) gets tuned then.
 - Critical small set (must be covered, verify in first snapshot): `~/.claude` (settings.json, scheduled-tasks/, projects/ transcripts 3.9GB, skills/, plugins/, hooks/, plans/), `~/.aws`, `~/.ssh`, `~/.config/ghostty`, `~/.zshrc`, `~/.gitconfig`, `~/Library/Application Support/Claude` minus caches, `~/github`.
 - External disk `BACKUP PIET`: 1TB HGST 2015, HFS+ case-sensitive, 858GB used. Contents: `Backups.backupdb/Pietro's MacBook Pro/` (19 snapshots 2017-06 → 2020-07 + one 2021-05 inProgress) and `FILES/` ≈ 33GB (FOTO, backup Foto, backup itunes iphone, Musica Iphone, video, video silvio, websites, WEP). Terminal cannot read it without Full Disk Access; Finder can.
+
+### Performance findings (first day, M4)
+
+- Upload capacity is 97 Mbit/s with many connections but only **3–9 Mbit/s per connection** (measured to Cloudflare and B2). restic therefore uses 16 parallel S3 connections (`MB_S3_CONNECTIONS`); the first backup averaged ~38 Mbit/s.
+- Hourly runs read everything in ~30 s, then upload ~200MiB one pack at a time at single-connection speed, so they take **8–14 minutes**, in the background with ~0% CPU. Harmless. The volume is mostly real activity: Claude transcripts appended by running sessions, plus Chrome and app databases.
+- Tested and ruled out as causes: low-priority I/O and `Nice` (kept), 64MiB packs (reverted to restic's default 16MiB), HTTP/2 multiplexing.
+- Possible future improvement, not needed: try Ethernet to see if per-connection upload speed rises.
 
 ## 2. Phase A — Accounts and secrets (Pietro, ~20 min, once)
 
@@ -89,12 +96,12 @@ Implementation rules:
 - [x] C2. **Pietro:** fill `~/.config/mac-backup/secrets.env` (created by install.sh, mode 600) from the Passwords app entry `restic m4-air`, with `BACKUP_HOST='m4-air'`. Claude never sees the values.
 - [x] C3. **Pietro:** System Settings → Privacy & Security → Full Disk Access → + → `~/.config/mac-backup/bin/mac-backup-runner` (press Cmd+Shift+. in the file picker to show the hidden `.config` folder). Not the restic binary.
 - [x] C4. `bin/restic.sh init` (repository `s3:https://s3.eu-central-003.backblazeb2.com/pietro-mac-backups/m4`). Done 2026-10-18: repository ID `7ca1f101db`; the prefix-restricted key works over the S3 endpoint, no fallback needed. If the S3 API rejects the prefix-restricted key, fall back to restic's native `b2:` backend (same key, `B2_ACCOUNT_ID`/`B2_ACCOUNT_KEY`) and record it in section 0.
-- [ ] C5. `install.sh --load`, then start the first backup with `launchctl kickstart gui/$(id -u)/com.pietro.mac-backup.backup` so it runs under the runner's FDA (a run started from Claude or a terminal gets that app's permissions instead). Keep the Mac awake and on power: `caffeinate -s -w <pid>` or just leave it plugged in with the lid open. ~8.6GB to upload: roughly 15 min at 100 Mbit/s up, 1 h at 20 Mbit/s.
-- [ ] C6. Verify: `restic snapshots`, `restic ls latest ~/.claude/settings.json ~/.aws ~/.ssh/config` present; `restic stats` roughly matches estimate; healthchecks shows a ping.
-- [ ] C7. Confirm the next hourly run completes on its own (`backup.log` + healthchecks).
-- [ ] C8. Test restore: `launchctl kickstart gui/$(id -u)/com.pietro.mac-backup.restore-test`, plus a manual `bin/restic.sh restore latest --include ~/.claude/settings.json --target /tmp/r`. Also run the check job once the same way.
-- [ ] C9. Create the Claude scheduled task on this laptop: weekly, prompt exactly `Read ~/.config/mac-backup/audit/weekly-audit.md and follow it exactly.` The instructions live in git, never in the task.
-- [ ] C10. Record restic version, repo ID, first snapshot ID and date here: `________`.
+- [x] C5. `install.sh --load`, then start the first backup with `launchctl kickstart gui/$(id -u)/com.pietro.mac-backup.backup` so it runs under the runner's FDA (a run started from Claude or a terminal gets that app's permissions instead). Keep the Mac awake and on power: `caffeinate -s -w <pid>` or just leave it plugged in with the lid open. ~8.6GB to upload: roughly 15 min at 100 Mbit/s up, 1 h at 20 Mbit/s.
+- [x] C6. Verify: `restic snapshots`, `restic ls latest ~/.claude/settings.json ~/.aws ~/.ssh/config` present; `restic stats` roughly matches estimate; healthchecks shows a ping.
+- [x] C7. Confirm the next hourly run completes on its own (`backup.log` + healthchecks).
+- [x] C8. Test restore: `launchctl kickstart gui/$(id -u)/com.pietro.mac-backup.restore-test`, plus a manual `bin/restic.sh restore latest --include ~/.claude/settings.json --target /tmp/r`. Also run the check job once the same way.
+- [x] C9. Create the Claude scheduled task on this laptop: weekly, prompt exactly `Read ~/.config/mac-backup/audit/weekly-audit.md and follow it exactly.` The instructions live in git, never in the task. Done: task `backup-audit`, Thursdays 10:00. Its runs start in the default permission mode, so **Pietro clicks "Run now" once** and approves the commands, which are then remembered.
+- [x] C10. Record restic version, repo ID, first snapshot ID and date here: restic 0.19.1; repository `7ca1f101db`; first snapshot `741f911a`, 2026-10-18 09:33, 276k files, 25.8GiB, **7.3GiB stored**, 4 unreadable files (now excluded). Restore test (`~/.claude/skills`, 456 files), weekly check and a manual restore of `settings.json` all passed the same day.
 
 ## 5. Phase D — Install on the other laptop (M2, its own Claude Code account)
 
@@ -150,6 +157,7 @@ Exclude decisions:
 ## 8. Decision log
 
 - 2026-10-18: region EU Central; Apple Passwords app + 600 env file; hourly; Claude task on both laptops (weekly → monthly → retire); Cursor state excluded; old disk / Time Machine deferred to phase Z.
+- 2026-10-18 (v8): phase C done on the M4. Pack size back to restic's default; excluded 4 always-unreadable Apple folders plus churning macOS telemetry and Chrome safe-browsing/favicons. Hourly runs take 8–14 min because of single-connection upload speed (see section 1).
 - 2026-10-18 (v7, first backup): restic uploads with 16 parallel S3 connections (`MB_S3_CONNECTIONS`); with restic's default of 5, B2 reached only 10–14 Mbit/s on a 97 Mbit/s line, with 16 it reached 53 Mbit/s. Low-priority disk I/O was tested and was not the bottleneck.
 - 2026-10-18 (v6): installed software is not backed up (reinstallable); a weekly inventory (Brewfile, apps, global packages) is written into the home folder instead. Scheduled task = one-line pointer to the audit file in git; the audit pulls first; cadence changed on both Macs together.
 - 2026-10-18 (v5, phase B): FDA via a compiled runner instead of the restic binary (no brew pin needed); mkdir lock instead of flock; `~/.cache` and other dev caches excluded after finding 41GB there; 25-unreadable-file tolerance; plan moved into the repo.

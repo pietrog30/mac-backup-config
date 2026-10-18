@@ -66,3 +66,17 @@ $HOME/Library/CloudStorage
 $HOME/Library/Mail
 $HOME/Library/Containers/com.apple.mail
 $HOME/Pictures/Photos Library.photoslibrary
+
+# --- Apple-protected system data that stays unreadable even with Full Disk Access (first backup, 2026-10-18)
+$HOME/Library/Group Containers/group.com.apple.CoreSpeech
+$HOME/Library/Group Containers/group.com.apple.secure-control-center-preferences
+$HOME/Library/Application Support/FileProvider
+
+# --- macOS telemetry and Chrome re-downloadable data that churns every hour (2026-10-18)
+$HOME/Library/DuetExpertCenter
+$HOME/Library/Biome
+$HOME/Library/Application Support/Knowledge
+$HOME/Library/IdentityServices
+$HOME/Library/Application Support/Google/Chrome/Safe Browsing
+$HOME/Library/Application Support/Google/Chrome/*/Favicons
+$HOME/Library/Application Support/Google/Chrome/*/Favicons-journal
