@@ -101,7 +101,7 @@ Implementation rules:
 - [x] C7. Confirm the next hourly run completes on its own (`backup.log` + healthchecks).
 - [x] C8. Test restore: `launchctl kickstart gui/$(id -u)/com.pietro.mac-backup.restore-test`, plus a manual `bin/restic.sh restore latest --include ~/.claude/settings.json --target /tmp/r`. Also run the check job once the same way.
 - [x] C9. Create the Claude scheduled task on this laptop: weekly, prompt exactly `Read ~/.config/mac-backup/audit/weekly-audit.md and follow it exactly.` The instructions live in git, never in the task. Done: task `backup-audit`, Thursdays 10:00. Its runs start in the default permission mode, so **Pietro clicks "Run now" once** and approves the commands, which are then remembered.
-- [x] C11. Test the alert path: send a `/fail` ping to `check-<host>` (body "TEST, ignore"), Pietro confirms the email arrives, then send a success ping to clear it. M4: test ping sent 2026-10-18 12:12.
+- [x] C11. Test the alert path: send a `/fail` ping to `check-<host>` (body "TEST, ignore"), Pietro confirms the email arrives, then send a success ping to clear it. M4: done 2026-10-18; email arrived, alert cleared.
 - [x] C10. Record restic version, repo ID, first snapshot ID and date here: restic 0.19.1; repository `7ca1f101db`; first snapshot `741f911a`, 2026-10-18 09:33, 276k files, 25.8GiB, **7.3GiB stored**, 4 unreadable files (now excluded). Restore test (`~/.claude/skills`, 456 files), weekly check and a manual restore of `settings.json` all passed the same day.
 
 ## 5. Phase D — Install on the other laptop (M2, its own Claude Code account)
