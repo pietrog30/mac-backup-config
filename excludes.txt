@@ -1,0 +1,68 @@
+# restic exclude patterns, one per line. restic expands $HOME.
+# Patterns starting with / are absolute; patterns without a slash match a name anywhere.
+# Rule of thumb: exclude only what can be re-downloaded or rebuilt.
+
+# --- macOS caches and logs
+$HOME/Library/Caches
+$HOME/Library/Logs
+$HOME/.Trash
+
+# --- Developer tool caches, package stores, runtimes
+$HOME/.cache
+$HOME/.npm
+$HOME/.local/share/uv
+$HOME/.local/share/claude
+$HOME/Library/Developer/CoreSimulator
+$HOME/Library/Developer/Xcode/DerivedData
+$HOME/Library/Containers/com.docker.docker
+node_modules
+.venv
+__pycache__
+.next
+.turbo
+target/debug
+target/release
+
+# --- Cursor (chat state database deliberately excluded, decided 2026-10-18)
+$HOME/.cursor/extensions
+$HOME/Library/Application Support/Cursor/CachedData
+$HOME/Library/Application Support/Cursor/logs
+$HOME/Library/Application Support/Cursor/Cache
+$HOME/Library/Application Support/Cursor/CachedExtensionVSIXs
+$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb
+$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb.backup
+$HOME/Library/Application Support/Cursor/User/globalStorage/anysphere.cursor-agent-worker
+
+# --- Claude Desktop: VM images, bundled CLI versions, browser caches
+$HOME/Library/Application Support/Claude/vm_bundles
+$HOME/Library/Application Support/Claude/claude-code
+$HOME/Library/Application Support/Claude/claude-code-vm
+$HOME/Library/Application Support/Claude/Cache
+$HOME/Library/Application Support/Claude/Code Cache
+$HOME/Library/Application Support/Claude/GPUCache
+$HOME/Library/Application Support/Claude/GPUPersistentCache
+$HOME/Library/Application Support/Claude/DawnGraphiteCache
+$HOME/Library/Application Support/Claude/DawnWebGPUCache
+$HOME/Library/Application Support/Claude/GraphiteDawnCache
+$HOME/Library/Application Support/Claude/Crashpad
+
+# --- Claude Code: caches and debug output
+$HOME/.claude/cache
+$HOME/.claude/paste-cache
+$HOME/.claude/downloads
+$HOME/.claude/debug
+$HOME/.claude/telemetry
+
+# --- Chrome caches (profiles themselves are kept)
+$HOME/Library/Application Support/Google/Chrome/*/Cache
+$HOME/Library/Application Support/Google/Chrome/*/Code Cache
+$HOME/Library/Application Support/Google/Chrome/*/GPUCache
+$HOME/Library/Application Support/Google/Chrome/*/Service Worker/CacheStorage
+
+# --- Cloud-synced placeholders: reading them forces a download of everything
+$HOME/Library/CloudStorage
+
+# --- Out of scope (decided 2026-10-18)
+$HOME/Library/Mail
+$HOME/Library/Containers/com.apple.mail
+$HOME/Pictures/Photos Library.photoslibrary

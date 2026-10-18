@@ -1,0 +1,159 @@
+# Laptop backup plan — restic → Backblaze B2, operated by Claude
+
+Status: v5, 2026-10-18 (phase B built). Lives in `pietrog30/mac-backup-config` at `docs/backup-plan.md`. Owner: Pietro. Operator: Claude Code (one account per laptop).
+This file is the single source of truth for the project. Tick boxes as steps complete; both laptops follow it.
+
+## 0. Decisions (settled)
+
+| Topic | Decision |
+|---|---|
+| Tool | restic (open source, fully scriptable, repo = plain files). Arq rejected: GUI-only config. Kopia rejected: weaker macOS metadata, GUI is its only edge. |
+| Storage | Backblaze B2, region **EU Central** (Pietro lives in Italy; faster restores, EU data residency; the Toronto-time laptop is physically in Italy too), one private bucket with lifecycle "hide, keep prior versions 30 days" (soft delete: a laptop key cannot irrecoverably wipe its own backup), **two repositories** (one per laptop, prefix `m4/` and `m2/`). Separate repos = no lock contention, per-laptop keys. Accessed through B2's S3-compatible endpoint with restic's `s3:` backend (more robust than the native `b2:` backend). Soft delete protects against mistakes, buggy prunes and naive malware; a stolen laptop key can still delete specific versions, so true immutability would need Object Lock (not used). S3 rejected on price and because a company AWS account is the wrong home for personal laptop backups. |
+| Scope | Whole home directory, default-include, with an exclude list (section 7). Mail and Photos libraries out of scope. |
+| Schedule | Backup hourly (revisit to every 4 h after the first week if the logs show it is intrusive). `forget --prune` weekly. `check` weekly, with 5% data read monthly. Test restore quarterly. |
+| Retention | keep 24 hourly, 14 daily, 8 weekly, 12 monthly. |
+| Secrets | Source of truth: Apple Passwords app (iCloud-synced to both Macs), one entry per laptop with repo URL, restic password, B2 keyID/key, healthchecks URL. Machine copy: `~/.config/mac-backup/secrets.env`, mode 600, per laptop (readable by launchd, no keychain ACL prompts; FileVault encrypts at rest). Login keychain not used. Never in the config repo. |
+| Config | Private GitHub repo `pietrog30/mac-backup-config`, cloned to `~/.config/mac-backup` on each Mac. Text only, no data, no secrets. |
+| Full Disk Access | Granted to one tiny compiled binary, `bin/mac-backup-runner`, which launchd starts and which execs the job scripts. macOS attributes FDA to the launchd-started process and its children inherit it, so restic upgrades never lose access. Granting FDA to the restic binary would not work under launchd, because bash, not restic, would be the responsible process. |
+| Monitoring | healthchecks.io, two checks per laptop: `backup-<host>` (period 24h, grace 12h) and `check-<host>` (period 8d). Scripts also do size sanity checks. Plus a weekly Claude scheduled task on **both** laptops (each audits its own repo and local health). Cadence plan: weekly for the first ~3 months → monthly once the reports are boring → consider removing once scripts + healthchecks have proven themselves. |
+| Old HGST disk, Time Machine | Deferred to the very last step (phase Z). Not part of the core goal. |
+
+Expected cost: the M4 measured at ~8.6GB stored (section 1); both laptops plus a year of history likely 20–40GB → **well under $1/month** on B2. Restores free (3× stored egress allowance).
+
+## 1. Facts gathered (this laptop, M4)
+
+- Model: MacBook Air M4, macOS 15.6.1, Homebrew 7.0.8. restic/rclone/b2 not installed.
+- Hostnames: `hostname` = `abhijeets-macbook-air-7.home`, LocalHostName = `Abhijeets-MacBook-Air-7`, ComputerName = "Abhijeet's MacBook Air (5)". Misleading; restic will be run with `--host m4-air` instead of relying on hostname.
+- No iCloud Drive on this Mac.
+- Home = 190GB. Rebuildable bulk: Docker container 68GB, Cursor `globalStorage` 34GB (state.vscdb 16GB + .backup 12GB + agent-worker 6GB), Claude Desktop `vm_bundles` 10GB + caches 1.5GB, `~/Library/Caches` 6.6GB, Chrome 2.8GB. Plus `~/.cache` 41GB (uv package cache 38GB), `~/.npm` 0.8GB, Cursor extensions 1.5GB — all excluded.
+- **Measured payload (dry-run 2026-10-18, restic 0.19.1):** 269k files, 25.3GB read, 21.4GB unique, **8.6GB stored** after compression (transcripts compress very well). The scan took 59 s, so hourly runs are cheap. The dry-run hit 797 read errors in macOS-protected `~/Library` folders because it ran without Full Disk Access; the first real run under the runner shows how many remain, and `MB_MAX_READ_ERRORS` (25) gets tuned then.
+- Critical small set (must be covered, verify in first snapshot): `~/.claude` (settings.json, scheduled-tasks/, projects/ transcripts 3.9GB, skills/, plugins/, hooks/, plans/), `~/.aws`, `~/.ssh`, `~/.config/ghostty`, `~/.zshrc`, `~/.gitconfig`, `~/Library/Application Support/Claude` minus caches, `~/github`.
+- External disk `BACKUP PIET`: 1TB HGST 2015, HFS+ case-sensitive, 858GB used. Contents: `Backups.backupdb/Pietro's MacBook Pro/` (19 snapshots 2017-06 → 2020-07 + one 2021-05 inProgress) and `FILES/` ≈ 33GB (FOTO, backup Foto, backup itunes iphone, Musica Iphone, video, video silvio, websites, WEP). Terminal cannot read it without Full Disk Access; Finder can.
+
+## 2. Phase A — Accounts and secrets (Pietro, ~20 min, once)
+
+- [x] A1. Backblaze account, created with region **EU Central** (the region is picked at sign-up and applies to every bucket; it cannot be changed later). Enable 2FA. Create bucket `pietro-mac-backups` (names are global; if taken, pick a variant and record it here: `________`) (private; server-side encryption SSE-B2 is automatic and cannot be turned off; harmless, restic encrypts client-side too; lifecycle rule: **keep prior versions for 30 days** (not "keep only the last version"); Object Lock off). S3 endpoint: **`s3.eu-central-003.backblazeb2.com`** (recorded 2026-10-18).
+- [x] A2. Create two B2 application keys, each restricted to the bucket and a name prefix:
+  - `restic-m4` → prefix `m4/`
+  - `restic-m2` → prefix `m2/`
+  Capabilities: listBuckets, listFiles, readFiles, writeFiles, deleteFiles. Record keyID + applicationKey in the Passwords app (A3).
+- [x] A3. Generate two restic passwords (`openssl rand -base64 32`), one per laptop. Apple Passwords entries: `restic m4-air`, `restic m2-air` (use the Notes field), each holding: repo URL, password, B2 keyID, B2 key, healthchecks URLs.
+- [x] A4. healthchecks.io account → four checks: `backup-m4-air`, `backup-m2-air` (period 1 day, grace 12 h) and `check-m4-air`, `check-m2-air` (period 8 days, grace 1 day), email alert. Record ping URLs in the Passwords entries.
+- [x] A5. GitHub → private repo `mac-backup-config` under Pietro's **personal** account `pietrog30`, empty: https://github.com/pietrog30/mac-backup-config (clone as `git@github-mac-backup:pietrog30/mac-backup-config.git` via the `~/.ssh/config` alias). Access is by a per-laptop **deploy key** with write access (repo Settings → Deploy keys), not by any account login: `~/.ssh/mac-backup-config` (M4 key created 2026-10-18). The `gh` CLI on the M4 is logged in as `pietro-devagent` (work/agent token) and is not used for this repo.
+
+## 3. Phase B — Build the config repo (Claude, this laptop)
+
+Layout (built 2026-10-18):
+
+```
+mac-backup-config/
+  README.md              overview, bootstrap, restore
+  install.sh             idempotent: brew install restic, build + sign the runner, create secrets.env, write LaunchAgents; --load / --unload
+  src/runner.c           mac-backup-runner source: accepts only backup|prune|check|restore-test, execs bin/<job>.sh
+  bin/env.sh             sourced by jobs: loads secrets.env + hosts/<host>.env, PATH, logging, lock, healthchecks ping, FDA probe, battery check
+  bin/backup.sh          hourly backup of $HOME
+  bin/prune.sh           weekly forget --prune (24h/14d/8w/12m)
+  bin/check.sh           weekly: FDA probe, restic check (5% read in week 1 of a month), critical paths, size trend
+  bin/restore-test.sh    quarterly: restore a random small critical folder with --verify
+  bin/restic.sh          manual helper: restic with this Mac's secrets loaded
+  excludes.txt           shared exclude list — the source of truth (section 7 only summarizes)
+  critical-paths.txt     paths that must be in every snapshot when they exist locally
+  hosts/<host>.env       RESTIC_REPOSITORY + AWS_DEFAULT_REGION per Mac; optional hosts/<host>.excludes
+  secrets.env.example    template for the gitignored secrets.env
+  audit/weekly-audit.md  prompt for the Claude scheduled task
+  docs/backup-plan.md    this file
+```
+
+Implementation rules:
+- Scripts are `bash` 3.2-compatible (macOS `/bin/bash`), `set -euo pipefail`, log to `~/Library/Logs/mac-backup/<job>.log` (rotated at 5 MB), exit non-zero on any failure.
+- Secrets come only from `secrets.env` (mode 600, gitignored): `BACKUP_HOST`, `RESTIC_PASSWORD`, `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (B2 keyID/key), `HC_BACKUP_URL`, `HC_CHECK_URL`. Scripts refuse to run if it is missing, not mode 600, or still has placeholders.
+- `backup.sh`: takes a lock (mkdir-based; macOS has no `flock`), skips if another job holds it or if on battery below 20%, pings `/start`, fails fast if the FDA probe fails, runs `restic unlock` (stale locks only), then `restic backup ~ --one-file-system --no-scan --exclude-caches --exclude-if-present .nobackup` with `RESTIC_PACK_SIZE=64`. Exit 3 (some files unreadable) counts as success up to 25 unreadable files, otherwise fail. Output tail goes to healthchecks.
+- `prune.sh`, `check.sh`, `restore-test.sh` wait up to 1 h for the lock. Failures ping `HC_CHECK_URL/fail`; `check.sh` pings `HC_CHECK_URL` on success.
+- FDA probe: reading `~/Library/Application Support/com.apple.TCC/TCC.db`, which only succeeds with Full Disk Access.
+- LaunchAgents `com.pietro.mac-backup.<job>` are generated by `install.sh`: `StartCalendarInterval` (backup :17 hourly, prune Sun 12:41, check Wed 12:41, restore-test 2 Jan/Apr/Jul/Oct 12:51), `Nice 10`, `LowPriorityIO`. Missed runs fire once on wake.
+- Nothing machine-specific outside `hosts/`.
+
+- [x] B1. Write files above, move this plan into `docs/`, commit, push.
+- [x] B2. Review exclude list against this Mac with a dry-run (results in section 1).
+
+## 4. Phase C — Install on this laptop (M4)
+
+- [ ] C1. Config repo already cloned to `~/.config/mac-backup` (done in B). Run `install.sh`.
+- [ ] C2. **Pietro:** fill `~/.config/mac-backup/secrets.env` (created by install.sh, mode 600) from the Passwords app entry `restic m4-air`, with `BACKUP_HOST='m4-air'`. Claude never sees the values.
+- [ ] C3. **Pietro:** System Settings → Privacy & Security → Full Disk Access → + → `~/.config/mac-backup/bin/mac-backup-runner` (press Cmd+Shift+. in the file picker to show the hidden `.config` folder). Not the restic binary.
+- [ ] C4. `bin/restic.sh init` (repository `s3:https://s3.eu-central-003.backblazeb2.com/pietro-mac-backups/m4`). If the S3 API rejects the prefix-restricted key, fall back to restic's native `b2:` backend (same key, `B2_ACCOUNT_ID`/`B2_ACCOUNT_KEY`) and record it in section 0.
+- [ ] C5. `install.sh --load`, then start the first backup with `launchctl kickstart gui/$(id -u)/com.pietro.mac-backup.backup` so it runs under the runner's FDA (a run started from Claude or a terminal gets that app's permissions instead). Keep the Mac awake and on power: `caffeinate -s -w <pid>` or just leave it plugged in with the lid open. ~8.6GB to upload: roughly 15 min at 100 Mbit/s up, 1 h at 20 Mbit/s.
+- [ ] C6. Verify: `restic snapshots`, `restic ls latest ~/.claude/settings.json ~/.aws ~/.ssh/config` present; `restic stats` roughly matches estimate; healthchecks shows a ping.
+- [ ] C7. Confirm the next hourly run completes on its own (`backup.log` + healthchecks).
+- [ ] C8. Test restore: `launchctl kickstart gui/$(id -u)/com.pietro.mac-backup.restore-test`, plus a manual `bin/restic.sh restore latest --include ~/.claude/settings.json --target /tmp/r`. Also run the check job once the same way.
+- [ ] C9. Create the weekly Claude scheduled task on this laptop from `audit/weekly-audit.md`.
+- [ ] C10. Record restic version, repo ID, first snapshot ID and date here: `________`.
+
+## 5. Phase D — Install on the other laptop (M2, its own Claude Code account)
+
+Hand-off: the M2 gets this file from the config repo (`docs/backup-plan.md`); AirDrop only as a fallback. Its Claude reads sections 0, 3 (done), 4, 6, 7 and runs phase C with `hosts/m2-air.env`. Secrets come from the Passwords app (already synced), never from this file.
+
+- [ ] D1. GitHub access: the M2's Claude Code is believed to use Pietro's personal account directly, so it clones over HTTPS with no extra setup (verify with `gh auth status`). Fallback, if it is restricted like the M4: create an M2 deploy key (`ssh-keygen -t ed25519 -f ~/.ssh/mac-backup-config -N "" -C "m2-air mac-backup-config deploy key"`), Pietro adds it with write access, add the same `Host github-mac-backup` block to `~/.ssh/config`. Then clone the config repo, `install.sh`, `secrets.env` from the Passwords app, FDA grant.
+- [ ] D2. Confirm `hosts/m2-air.env` exists (if the M2 differs, e.g. real hostname or extra excludes, add them there, commit, push; the M4 pulls). Decide the iCloud Drive question (section 7 notes) and record it here: `________`.
+- [ ] D3. `restic init` on `s3:https://s3.eu-central-003.backblazeb2.com/pietro-mac-backups/m2`, first backup, verify, launchd, restore test, scheduled task — same checks as C4–C10.
+- [ ] D4. Record M2 facts (model, home size, payload, snapshot ID) here: `________`.
+
+## 6. Phase E — Operations runbook
+
+Weekly Claude scheduled task (both laptops, each on its own repo; identical prompt kept in `audit/weekly-audit.md`). Cadence: weekly for ~3 months, then monthly, then possibly retire it — the scripts + healthchecks already catch hard failures; the task adds trend reading and judgement:
+1. `restic snapshots --json`: newest snapshot < 26 h old; roughly one per awake hour over the last week (laptops sleep, so do not expect 24/day).
+2. Tail `~/Library/Logs/mac-backup/backup.log` for errors; read healthchecks status.
+3. `restic check` output from the last weekly run is clean; monthly read-data run happened.
+4. FDA probe passed; restic version unchanged or deliberately upgraded.
+5. `restic stats latest` size trend; flag a jump > 20% (new bulk folder needs an exclude?) or a drop > 20% (something stopped being backed up?).
+6. Report in one message; propose fixes, do not change config without approval.
+
+Quarterly (launchd + reviewed by the audit): `restore-test.sh` restores one random folder and diffs it.
+
+Common tasks:
+- Manual restic: `~/.config/mac-backup/bin/restic.sh <args>` loads this Mac's secrets.
+- Restore one file: `bin/restic.sh restore latest --include <path> --target /tmp/restore`.
+- Restore from a date: `restic snapshots` → pick ID → `restic restore <ID> --include <path> --target …`.
+- Bare-metal (new Mac): install Homebrew + restic, fetch the laptop's entry from the Passwords app, `export RESTIC_REPOSITORY/RESTIC_PASSWORD/AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_DEFAULT_REGION`, `restic restore latest --target ~` (or `--include` for the critical set only), then re-run phase C so the new machine backs up.
+- Rotate B2 key: create new key in Backblaze, replace in `secrets.env` + Passwords app, delete old key.
+- Add a device (e.g. Mac mini, ~30 min): new B2 key with prefix `mini/`, new password, Passwords entry, `hosts/mac-mini.env`, clone config repo, `install.sh`, secrets.env, FDA grant, `restic init`, first backup, launchd, Claude task. Same bucket, no new accounts.
+- Move storage: `rclone sync <b2 remote>:… <new>` then change `REPO` in the host env file. No re-upload from laptops.
+- Change tool: new tool starts from today; keep the restic repos read-only for ≥ 12 months (≈ $1/month). History can be replayed into restic with `backup --time` if ever needed.
+- Upgrade restic: plain `brew upgrade restic` is safe; FDA belongs to the runner, not restic. Rebuilding the runner (only if `src/runner.c` changes) changes its signature: re-grant FDA, then kickstart the check job.
+- Add a folder to excludes: edit `excludes.txt`, commit, push, `git pull` on the other laptop. Already-stored data ages out via retention.
+
+## 7. Exclude list (draft, refine in B2)
+
+The list itself is `excludes.txt` in the repo (source of truth). Categories: macOS caches/logs/Trash; developer caches and package stores (`~/.cache` incl. uv's 38GB cache, `~/.npm`, `~/.local/share/uv`, `~/.local/share/claude`, `node_modules`, `.venv`, `__pycache__`, `.next`, `.turbo`, Rust `target/`); Docker's container; Cursor caches, extensions and its chat-state database; Claude Desktop VM bundles, bundled CLI versions and browser caches; Claude Code caches and debug output; Chrome caches; `~/Library/CloudStorage` placeholders; Mail and Photos (out of scope). Plus `--exclude-caches` and `--exclude-if-present .nobackup`; drop an empty `.nobackup` file into any folder to exclude it.
+
+Per-host (`hosts/m2-air.excludes`, conditional on the D2 decision): `~/Library/Mobile Documents` and any iCloud-managed folders.
+
+Notes:
+- **M2 / iCloud Drive:** the M2 syncs Desktop, Documents and more to iCloud. With "Optimize Mac Storage" on, those folders contain dataless placeholders and restic would force a download of everything. Either turn Optimize Mac Storage off on the M2 (then include them — they are the real files) or exclude the iCloud-managed folders and rely on iCloud for them. Decide in D2.
+- Docker exclude drops anything stored in Docker volumes. Fine unless a local database there matters.
+- `~/Library/Logs` exclude also drops the backup logs themselves; acceptable.
+
+Exclude decisions:
+- `Cursor/User/globalStorage/state.vscdb` (16GB, Cursor chat history, changes constantly): **excluded** (decided 2026-10-18). Flip if Cursor history ever matters.
+- `~/github` (7.3GB): **include** (unpushed branches). node_modules already excluded.
+- `~/Downloads` (2.7GB): include.
+- `~/Library/Application Support/Claude/claude-code` and `claude-code-vm`: **excluded** (bundled CLI binaries, re-downloaded). `claude-code-sessions`, `local-agent-mode-sessions`, configs: included.
+
+## 8. Decision log
+
+- 2026-10-18: region EU Central; Apple Passwords app + 600 env file; hourly; Claude task on both laptops (weekly → monthly → retire); Cursor state excluded; old disk / Time Machine deferred to phase Z.
+- 2026-10-18 (v5, phase B): FDA via a compiled runner instead of the restic binary (no brew pin needed); mkdir lock instead of flock; `~/.cache` and other dev caches excluded after finding 41GB there; 25-unreadable-file tolerance; plan moved into the repo.
+- 2026-10-18 (v4): bucket soft-delete 30 days; S3-compatible endpoint; cloud-placeholder folders excluded; plan lives in the config repo; `critical-paths.txt` checked weekly; flock/unlock/battery guard/pack-size 64 in `backup.sh`; restic upgrade procedure; Docker-volume and logs caveats noted.
+
+## Phase Z — Last, deferred: old HGST disk and Time Machine
+
+Do nothing here until everything above is running on both laptops. Kept for reference.
+
+- [ ] Z1. Grant Full Disk Access to the Claude desktop app (System Settings → Privacy & Security → Full Disk Access) so Claude can read `/Volumes/BACKUP PIET`. Alternative: do the copy in Finder.
+- [ ] Z2. Copy `/Volumes/BACKUP PIET/FILES` → `~/Archive/old-macbook-pro/FILES` (33GB, 5400rpm disk → ~30–60 min). Use `rsync -avE --progress`, then `rsync -avEc --dry-run` to verify checksums; expect zero differences.
+- [ ] Z3. Browse `Backups.backupdb/Pietro's MacBook Pro/Latest/Users/<user>/` for anything else worth keeping (Documents, Desktop, dotfiles). Copy to `~/Archive/old-macbook-pro/latest-snapshot/`. Decide and record here what was taken.
+- [ ] Z4. Decide whether `~/Archive` joins the cloud backup (adds ~33GB ≈ $0.25/month).
+- [ ] Z5. Only then decide about Time Machine (below).
+
+Time Machine (optional second layer): Only after Z2 is verified. Either erase `BACKUP PIET` to APFS (loses the 2017–2021 snapshots of the old Mac) and use it as a stopgap, or buy a 1–2TB SSD. Time Machine → add disk; plug into each laptop weekly. Do not rely on it; it is convenience, not protection.
+

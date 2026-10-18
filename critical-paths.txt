@@ -1,0 +1,18 @@
+# Paths (relative to $HOME) that must be in every snapshot when they exist on disk.
+# check.sh fails if one exists locally but is missing from the latest snapshot.
+.claude/settings.json
+.claude/scheduled-tasks
+.claude/projects
+.claude/skills
+.claude/hooks
+.claude/plans
+.aws
+.ssh
+.config/ghostty
+.config/mac-backup/secrets.env
+.zshrc
+.gitconfig
+.codex/sessions
+Library/Application Support/Claude/claude_desktop_config.json
+Library/Application Support/Claude/config.json
+github

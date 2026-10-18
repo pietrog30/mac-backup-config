@@ -1,0 +1,4 @@
+# Local-only files: secrets, runtime state, the locally built (FDA-granted) runner binary.
+secrets.env
+state/
+bin/mac-backup-runner
