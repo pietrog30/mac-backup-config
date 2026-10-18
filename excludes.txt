@@ -10,6 +10,8 @@ $HOME/.Trash
 # --- Developer tool caches, package stores, runtimes
 $HOME/.cache
 $HOME/.npm
+$HOME/Library/pnpm
+$HOME/.diffusionbee/downloads
 $HOME/.local/share/uv
 $HOME/.local/share/claude
 $HOME/Library/Developer/CoreSimulator
@@ -58,6 +60,9 @@ $HOME/Library/Application Support/Google/Chrome/*/Cache
 $HOME/Library/Application Support/Google/Chrome/*/Code Cache
 $HOME/Library/Application Support/Google/Chrome/*/GPUCache
 $HOME/Library/Application Support/Google/Chrome/*/Service Worker/CacheStorage
+$HOME/Library/Application Support/Google/Chrome/*/Extensions
+$HOME/Library/Application Support/Google/GoogleUpdater
+$HOME/Library/Application Support/Google/DriveFS
 
 # --- Cloud-synced placeholders: reading them forces a download of everything
 $HOME/Library/CloudStorage
