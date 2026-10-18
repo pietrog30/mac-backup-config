@@ -3,4 +3,4 @@
 #   ~/.config/mac-backup/bin/restic.sh snapshots
 #   ~/.config/mac-backup/bin/restic.sh restore latest --include ~/.zshrc --target /tmp/r
 source "$HOME/.config/mac-backup/bin/env.sh"
-exec restic "$@"
+exec restic -o "s3.connections=$MB_S3_CONNECTIONS" "$@"

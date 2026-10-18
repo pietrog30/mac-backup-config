@@ -85,10 +85,10 @@ Implementation rules:
 
 ## 4. Phase C — Install on this laptop (M4)
 
-- [ ] C1. Config repo already cloned to `~/.config/mac-backup` (done in B). Run `install.sh`.
-- [ ] C2. **Pietro:** fill `~/.config/mac-backup/secrets.env` (created by install.sh, mode 600) from the Passwords app entry `restic m4-air`, with `BACKUP_HOST='m4-air'`. Claude never sees the values.
-- [ ] C3. **Pietro:** System Settings → Privacy & Security → Full Disk Access → + → `~/.config/mac-backup/bin/mac-backup-runner` (press Cmd+Shift+. in the file picker to show the hidden `.config` folder). Not the restic binary.
-- [ ] C4. `bin/restic.sh init` (repository `s3:https://s3.eu-central-003.backblazeb2.com/pietro-mac-backups/m4`). If the S3 API rejects the prefix-restricted key, fall back to restic's native `b2:` backend (same key, `B2_ACCOUNT_ID`/`B2_ACCOUNT_KEY`) and record it in section 0.
+- [x] C1. Config repo already cloned to `~/.config/mac-backup` (done in B). Run `install.sh`.
+- [x] C2. **Pietro:** fill `~/.config/mac-backup/secrets.env` (created by install.sh, mode 600) from the Passwords app entry `restic m4-air`, with `BACKUP_HOST='m4-air'`. Claude never sees the values.
+- [x] C3. **Pietro:** System Settings → Privacy & Security → Full Disk Access → + → `~/.config/mac-backup/bin/mac-backup-runner` (press Cmd+Shift+. in the file picker to show the hidden `.config` folder). Not the restic binary.
+- [x] C4. `bin/restic.sh init` (repository `s3:https://s3.eu-central-003.backblazeb2.com/pietro-mac-backups/m4`). Done 2026-10-18: repository ID `7ca1f101db`; the prefix-restricted key works over the S3 endpoint, no fallback needed. If the S3 API rejects the prefix-restricted key, fall back to restic's native `b2:` backend (same key, `B2_ACCOUNT_ID`/`B2_ACCOUNT_KEY`) and record it in section 0.
 - [ ] C5. `install.sh --load`, then start the first backup with `launchctl kickstart gui/$(id -u)/com.pietro.mac-backup.backup` so it runs under the runner's FDA (a run started from Claude or a terminal gets that app's permissions instead). Keep the Mac awake and on power: `caffeinate -s -w <pid>` or just leave it plugged in with the lid open. ~8.6GB to upload: roughly 15 min at 100 Mbit/s up, 1 h at 20 Mbit/s.
 - [ ] C6. Verify: `restic snapshots`, `restic ls latest ~/.claude/settings.json ~/.aws ~/.ssh/config` present; `restic stats` roughly matches estimate; healthchecks shows a ping.
 - [ ] C7. Confirm the next hourly run completes on its own (`backup.log` + healthchecks).
@@ -150,6 +150,7 @@ Exclude decisions:
 ## 8. Decision log
 
 - 2026-10-18: region EU Central; Apple Passwords app + 600 env file; hourly; Claude task on both laptops (weekly → monthly → retire); Cursor state excluded; old disk / Time Machine deferred to phase Z.
+- 2026-10-18 (v7, first backup): restic uploads with 16 parallel S3 connections (`MB_S3_CONNECTIONS`); with restic's default of 5, B2 reached only 10–14 Mbit/s on a 97 Mbit/s line, with 16 it reached 53 Mbit/s. Low-priority disk I/O was tested and was not the bottleneck.
 - 2026-10-18 (v6): installed software is not backed up (reinstallable); a weekly inventory (Brewfile, apps, global packages) is written into the home folder instead. Scheduled task = one-line pointer to the audit file in git; the audit pulls first; cadence changed on both Macs together.
 - 2026-10-18 (v5, phase B): FDA via a compiled runner instead of the restic binary (no brew pin needed); mkdir lock instead of flock; `~/.cache` and other dev caches excluded after finding 41GB there; 25-unreadable-file tolerance; plan moved into the repo.
 - 2026-10-18 (v4): bucket soft-delete 30 days; S3-compatible endpoint; cloud-placeholder folders excluded; plan lives in the config repo; `critical-paths.txt` checked weekly; flock/unlock/battery guard/pack-size 64 in `backup.sh`; restic upgrade procedure; Docker-volume and logs caveats noted.

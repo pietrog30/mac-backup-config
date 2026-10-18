@@ -20,7 +20,7 @@ excl=(--exclude-file "$MB_DIR/excludes.txt")
 [[ -f "$MB_DIR/hosts/$BACKUP_HOST.excludes" ]] && excl+=(--exclude-file "$MB_DIR/hosts/$BACKUP_HOST.excludes")
 
 set +e
-restic backup "$HOME" \
+restic -o "s3.connections=$MB_S3_CONNECTIONS" backup "$HOME" \
     --host "$BACKUP_HOST" --tag auto \
     --one-file-system --no-scan \
     --exclude-caches --exclude-if-present .nobackup \

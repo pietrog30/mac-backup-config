@@ -33,6 +33,7 @@ source "$HOST_ENV"
 set +a
 : "${RESTIC_REPOSITORY:?}"
 export RESTIC_PACK_SIZE="${RESTIC_PACK_SIZE:-64}"   # MiB; fewer, larger objects = fewer B2 API calls
+MB_S3_CONNECTIONS="${MB_S3_CONNECTIONS:-16}"        # parallel uploads; B2 is slow per connection, restic defaults to 5
 
 # --- logging: append to ~/Library/Logs/mac-backup/<job>.log, rotate at 5 MB
 mb_start() {
