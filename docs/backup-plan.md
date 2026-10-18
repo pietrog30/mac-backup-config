@@ -101,6 +101,7 @@ Implementation rules:
 - [x] C7. Confirm the next hourly run completes on its own (`backup.log` + healthchecks).
 - [x] C8. Test restore: `launchctl kickstart gui/$(id -u)/com.pietro.mac-backup.restore-test`, plus a manual `bin/restic.sh restore latest --include ~/.claude/settings.json --target /tmp/r`. Also run the check job once the same way.
 - [x] C9. Create the Claude scheduled task on this laptop: weekly, prompt exactly `Read ~/.config/mac-backup/audit/weekly-audit.md and follow it exactly.` The instructions live in git, never in the task. Done: task `backup-audit`, Thursdays 10:00. Its runs start in the default permission mode, so **Pietro clicks "Run now" once** and approves the commands, which are then remembered.
+- [x] C11. Test the alert path: send a `/fail` ping to `check-<host>` (body "TEST, ignore"), Pietro confirms the email arrives, then send a success ping to clear it. M4: test ping sent 2026-10-18 12:12.
 - [x] C10. Record restic version, repo ID, first snapshot ID and date here: restic 0.19.1; repository `7ca1f101db`; first snapshot `741f911a`, 2026-10-18 09:33, 276k files, 25.8GiB, **7.3GiB stored**, 4 unreadable files (now excluded). Restore test (`~/.claude/skills`, 456 files), weekly check and a manual restore of `settings.json` all passed the same day.
 
 ## 5. Phase D — Install on the other laptop (M2, its own Claude Code account)
@@ -109,7 +110,7 @@ Hand-off: the M2 gets this file from the config repo (`docs/backup-plan.md`); Ai
 
 - [ ] D1. GitHub access: the M2's Claude Code is believed to use Pietro's personal account directly, so it clones over HTTPS with no extra setup (verify with `gh auth status`). Fallback, if it is restricted like the M4: create an M2 deploy key (`ssh-keygen -t ed25519 -f ~/.ssh/mac-backup-config -N "" -C "m2-air mac-backup-config deploy key"`), Pietro adds it with write access, add the same `Host github-mac-backup` block to `~/.ssh/config`. Then clone the config repo, `install.sh`, `secrets.env` from the Passwords app, FDA grant.
 - [ ] D2. Confirm `hosts/m2-air.env` exists (if the M2 differs, e.g. real hostname or extra excludes, add them there, commit, push; the M4 pulls). Decide the iCloud Drive question (section 7 notes) and record it here: `________`.
-- [ ] D3. `restic init` on `s3:https://s3.eu-central-003.backblazeb2.com/pietro-mac-backups/m2`, first backup, verify, launchd, restore test, scheduled task — same checks as C4–C10.
+- [ ] D3. `restic init` on `s3:https://s3.eu-central-003.backblazeb2.com/pietro-mac-backups/m2`, first backup, verify, launchd, restore test, scheduled task, alert-email test — same checks as C4–C11.
 - [ ] D4. Record M2 facts (model, home size, payload, snapshot ID) here: `________`.
 
 ## 6. Phase E — Operations runbook
@@ -130,6 +131,7 @@ Common tasks:
 - Restore from a date: `restic snapshots` → pick ID → `restic restore <ID> --include <path> --target …`.
 - Bare-metal (new Mac): install Homebrew + restic, fetch the laptop's entry from the Passwords app, `export RESTIC_REPOSITORY/RESTIC_PASSWORD/AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_DEFAULT_REGION`, `restic restore latest --target ~` (or `--include` for the critical set only), then re-run phase C so the new machine backs up.
 - Rotate B2 key: create new key in Backblaze, replace in `secrets.env` + Passwords app, delete old key.
+- Test alerts: `bash -c 'source ~/.config/mac-backup/bin/env.sh; echo "TEST, ignore" | curl -fsS --data-binary @- "$HC_CHECK_URL/fail"'`, confirm the email, then the same with no `/fail` suffix to clear it.
 - Add a device (e.g. Mac mini, ~30 min): new B2 key with prefix `mini/`, new password, Passwords entry, `hosts/mac-mini.env`, clone config repo, `install.sh`, secrets.env, FDA grant, `restic init`, first backup, launchd, Claude task. Same bucket, no new accounts.
 - Move storage: `rclone sync <b2 remote>:… <new>` then change `REPO` in the host env file. No re-upload from laptops.
 - Change tool: new tool starts from today; keep the restic repos read-only for ≥ 12 months (≈ $1/month). History can be replayed into restic with `backup --time` if ever needed.
