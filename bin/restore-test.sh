@@ -28,5 +28,5 @@ if (( rc != 0 )) || [[ ! -e "$tmp$HOME/$pick" ]]; then
     log "FAIL: restore of ~/$pick (exit $rc)"; mb_ping "$HC_CHECK_URL" /fail "$OUT"; exit 1
 fi
 files="$(find "$tmp$HOME/$pick" -type f | wc -l | tr -d ' ')"
-changed="$(diff -rq "$tmp$HOME/$pick" "$HOME/$pick" 2>/dev/null | wc -l | tr -d ' ')"
+changed="$( { diff -rq "$tmp$HOME/$pick" "$HOME/$pick" 2>/dev/null || true; } | wc -l | tr -d ' ')"  # diff exits 1 on differences
 log "ok: restored and verified $files files of ~/$pick ($changed differ from live, expected for files changed since the snapshot)"

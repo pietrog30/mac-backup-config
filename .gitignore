@@ -2,3 +2,4 @@
 secrets.env
 state/
 bin/mac-backup-runner
+.DS_Store

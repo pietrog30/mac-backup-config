@@ -31,7 +31,8 @@ note "critical paths: checked"
 size="$(restic stats --host "$BACKUP_HOST" --json latest 2>/dev/null | grep -Eo '"total_size":[0-9]+' | cut -d: -f2 || true)"
 if [[ -n "$size" ]]; then
     prev="$(cat "$MB_STATE/last-size" 2>/dev/null || true)"
-    note "latest snapshot size: $((size / 1048576)) MiB (previous: ${prev:+$((prev / 1048576)) MiB}${prev:-none})"
+    prev_txt=none; [[ -n "$prev" ]] && prev_txt="$((prev / 1048576)) MiB"
+    note "latest snapshot size: $((size / 1048576)) MiB (previous: $prev_txt)"
     if [[ -n "$prev" ]] && (( prev > 0 )); then
         change=$(( (size - prev) * 100 / prev ))
         if (( change > 20 || change < -20 )); then note "size changed ${change}% since last check"; problems=$((problems + 1)); fi
