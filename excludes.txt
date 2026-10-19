@@ -19,6 +19,7 @@ $HOME/Library/Developer/Xcode/DerivedData
 $HOME/Library/Containers/com.docker.docker
 node_modules
 .venv
+venv
 __pycache__
 .next
 .turbo
