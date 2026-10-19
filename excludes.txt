@@ -95,3 +95,14 @@ $HOME/Library/Application Support/Google/Chrome/*/Favicons-journal
 $HOME/Library/Metadata/CoreSpotlight
 $HOME/Library/Application Support/com.apple.wallpaper/aerials
 $HOME/Library/Group Containers/group.com.apple.chronod
+
+# --- Apple's own app containers: caches and agent state. Each carries a ~2.7 MB
+#     com.apple.data-container-personality attribute, so the ~/Library/Containers listing
+#     (250 MiB) was re-stored on every run (2026-10-19). Re-include the ones with user data.
+$HOME/Library/Containers/com.apple.*
+!$HOME/Library/Containers/com.apple.Notes
+!$HOME/Library/Containers/com.apple.Safari
+!$HOME/Library/Containers/com.apple.Maps
+!$HOME/Library/Containers/com.apple.BKAgentService
+!$HOME/Library/Containers/com.apple.TextEdit
+!$HOME/Library/Containers/com.apple.Preview
