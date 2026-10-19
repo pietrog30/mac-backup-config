@@ -89,3 +89,8 @@ $HOME/Library/IdentityServices
 $HOME/Library/Application Support/Google/Chrome/Safe Browsing
 $HOME/Library/Application Support/Google/Chrome/*/Favicons
 $HOME/Library/Application Support/Google/Chrome/*/Favicons-journal
+
+# --- Rebuilt or re-downloaded by macOS, churns after upgrades (Tahoe, 2026-10-19)
+$HOME/Library/Metadata/CoreSpotlight
+$HOME/Library/Application Support/com.apple.wallpaper/aerials
+$HOME/Library/Group Containers/group.com.apple.chronod
