@@ -79,6 +79,7 @@ $HOME/Pictures/Photos Library.photoslibrary
 $HOME/Library/Group Containers/group.com.apple.CoreSpeech
 $HOME/Library/Group Containers/group.com.apple.secure-control-center-preferences
 $HOME/Library/Application Support/FileProvider
+$HOME/Library/Daemon Containers/*/Data/com.apple.milod
 
 # --- macOS telemetry and Chrome re-downloadable data that churns every hour (2026-10-18)
 $HOME/Library/DuetExpertCenter
